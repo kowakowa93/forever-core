@@ -869,10 +869,6 @@ end
 -- A section with `trackerMaxHeight == "remaining"` gets what the capped sections above and below it leave, so the
 -- quest list is the one that scrolls. It is laid out after the others so their real heights are known first.
 local function LayoutModules(width, available, reserve)
-	local heading, body
-	if besideKaliels and TrackerKaliels.Fonts then
-		heading, body = TrackerKaliels.Fonts()
-	end
 	ns.TrackerOrder.Sort(modules)
 	local restIndex
 	for index, module in ipairs(modules) do
@@ -885,7 +881,7 @@ local function LayoutModules(width, available, reserve)
 		local module = modules[index]
 		module:SetWidth(width)
 		if TrackerKaliels.Style then
-			TrackerKaliels.Style(module, besideKaliels, heading, body)
+			TrackerKaliels.Style(module, besideKaliels)
 		end
 		local ok = RunSafe(module.safeCall, "tracker section update", module.Update, module, cap)
 		local used = ok and module:GetContentsHeight() or 0
