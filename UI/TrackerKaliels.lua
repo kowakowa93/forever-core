@@ -54,6 +54,8 @@ local function Fonts()
 	return heading, body
 end
 
+TrackerKaliels.Fonts = Fonts
+
 local function FontKey(heading, body)
 	return heading and (table.concat(heading, "|") .. "/" .. table.concat(body, "|")) or "native"
 end
@@ -63,6 +65,9 @@ local function Snapshot()
 	local edge = frame and frame.Background
 	if not edge then
 		return "pending"
+	end
+	if not frame:IsVisible() or Collapsed() then
+		return frame:IsVisible() and "collapsed" or "hidden"
 	end
 	local content = Content(edge)
 	local heading, body = Fonts()
@@ -113,16 +118,23 @@ local function StyleCollapse(module, active)
 				state.textPoints[index] = { header.Text:GetPoint(index) }
 			end
 		end
-		state.active = true
+		local file = reference:GetTexture()
+		local r, g, b, a = reference:GetVertexColor()
+		local collapsed = module:IsCollapsed()
+		local key = table.concat({ tostring(file), r, g, b, a, tostring(collapsed) }, "|")
+		if state.active and state.key == key then return end
+		local entering = not state.active
+		state.active, state.key = true, key
 		native:Hide()
-		state.button:SetNormalTexture(reference:GetTexture())
+		state.button:SetNormalTexture(file)
 		local texture = state.button:GetNormalTexture()
 		texture:SetAllPoints(state.button)
-		texture:SetVertexColor(reference:GetVertexColor())
-		local collapsed = module:IsCollapsed()
+		texture:SetVertexColor(r, g, b, a)
 		texture:SetTexCoord(collapsed and 0 or 0.5, collapsed and 0.5 or 1, 0.75, 1)
-		header.Text:ClearAllPoints()
-		header.Text:SetPoint("LEFT", header, "LEFT", 10, 1)
+		if entering then
+			header.Text:ClearAllPoints()
+			header.Text:SetPoint("LEFT", header, "LEFT", 10, 1)
+		end
 		state.button:Show()
 	elseif state.active then
 		state.active = false
@@ -137,10 +149,9 @@ end
 
 -- Only our section and pooled block instances are wrapped. Apply before native
 -- SetStringText measures row height, and retain each string's original font.
-function TrackerKaliels.Style(module, active)
+function TrackerKaliels.Style(module, active, heading, body)
 	StyleCollapse(module, active)
-	local heading, body
-	if active then heading, body = Fonts() end
+	if active and not heading then heading, body = Fonts() end
 	local state = module.kalielsFonts
 	if not state then
 		if not heading then return end
