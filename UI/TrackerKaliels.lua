@@ -7,7 +7,7 @@ local _, ns = ...
 local TrackerKaliels = {}
 ns.TrackerKaliels = TrackerKaliels
 local observer = CreateFrame("Frame")
-local enabled, onChange, previous, elapsed = false, nil, nil, 0
+local enabled, onChange = false, nil
 
 local function Frame()
 	return rawget(_G, "!KalielsTrackerFrame")
@@ -56,25 +56,6 @@ end
 
 local function FontKey(heading, body)
 	return heading and (table.concat(heading, "|") .. "/" .. table.concat(body, "|")) or "native"
-end
-
-local function Snapshot()
-	local frame = Frame()
-	local edge = frame and frame.Background
-	if not edge then
-		return "pending"
-	end
-	local content = Content(edge)
-	local heading, body = Fonts()
-	return table.concat({
-		tostring(frame:IsVisible()), tostring(Collapsed()),
-		tostring(edge:GetLeft()), tostring(edge:GetRight()),
-		tostring(edge:GetTop()), tostring(edge:GetBottom()),
-		tostring(edge:GetEffectiveScale()),
-		tostring(content:GetLeft()), tostring(content:GetRight()),
-		tostring(content:GetEffectiveScale()),
-		FontKey(heading, body),
-	}, "|")
 end
 
 -- KT hides the stock module button and draws its 16x16 module sprite at LEFT -6,2.
@@ -202,32 +183,60 @@ function TrackerKaliels.Style(module, active)
 	end
 end
 
-local function Tick(_, delta)
-	elapsed = elapsed + delta
-	if elapsed < 0.25 then
-		return
+-- KT has no public layout listener. Observe its completion methods and signals,
+-- never replace them or anchor our frames to KT. No recurring timer is needed.
+local watched = setmetatable({}, { __mode = "k" })
+local hooked = setmetatable({}, { __mode = "k" })
+local signalsRegistered = false
+local function Changed()
+	if enabled and onChange then onChange() end
+end
+local function Watch(frame)
+	if not frame or watched[frame] then return end
+	watched[frame] = true
+	for _, script in ipairs({ "OnShow", "OnHide", "OnSizeChanged" }) do
+		frame:HookScript(script, Changed)
 	end
-	elapsed = 0
-	local current = Snapshot()
-	if current ~= previous then
-		previous = current
-		if onChange then
-			onChange()
+end
+local function Observe()
+	local frame = Frame()
+	if not frame then return end
+	Watch(frame)
+	Watch(frame.Background)
+	Watch(rawget(_G, "KT_ObjectiveTrackerFrame"))
+	if not LibStub then return end
+	local library = LibStub("MSA-AceAddon-3.0", true)
+	local tracker = library and library:GetAddon("!KalielsTracker", true)
+	if not tracker or hooked[tracker] then return end
+	hooked[tracker] = true
+	for _, method in ipairs({ "Tracker_SetSize", "Tracker_Move", "Tracker_SetScale",
+		"Tracker_SetCollapsed", "Tracker_SetHidden", "Tracker_SetShown" }) do
+		if type(tracker[method]) == "function" then
+			hooksecurefunc(tracker, method, Changed)
 		end
 	end
 end
-
 function TrackerKaliels.SetEnabled(value)
 	enabled = value
-	observer:SetScript("OnUpdate", enabled and Frame() and Tick or nil)
+	if not value then return end
+	if not signalsRegistered and EventRegistry then
+		signalsRegistered = true
+		for _, signal in ipairs({ "TRACKER_INITIALIZED", "OPTIONS_CHANGED", "ADDON_ENABLED" }) do
+			EventRegistry:RegisterCallback("!KalielsTracker." .. signal, function()
+				Observe()
+				Changed()
+			end, observer)
+		end
+	end
+	Observe()
 end
-
 observer:RegisterEvent("ADDON_LOADED")
-observer:SetScript("OnEvent", function(_, _, name)
-	if name == "!KalielsTracker" then
-		TrackerKaliels.SetEnabled(enabled)
-		if enabled and onChange then
-			onChange()
+observer:RegisterEvent("PLAYER_ENTERING_WORLD")
+observer:SetScript("OnEvent", function(_, event, name)
+	if event == "PLAYER_ENTERING_WORLD" or name == "!KalielsTracker" then
+		if enabled then
+			TrackerKaliels.SetEnabled(true)
+			Changed()
 		end
 	end
 end)
