@@ -38,6 +38,7 @@ UI\Credits.lua
 UI\SettingsPage.lua
 UI\SettingsSections.lua
 UI\TrackerQuestie.lua
+UI\TrackerKaliels.lua
 UI\TrackerEqot.lua
 UI\TrackerEllesmere.lua
 UI\TrackerLock.lua

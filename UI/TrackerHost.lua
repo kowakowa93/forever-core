@@ -792,6 +792,8 @@ local TrackerQuestie = ns.TrackerQuestie or { List = function() end, Await = fun
 -- EllesmereUI's custom quest tracker, consulted after EQOT and before Questie: its list is the one a player who chose
 -- it sees, even while its own visibility rules hide the frame.
 local TrackerEllesmere = ns.TrackerEllesmere or { List = function() end, Await = function() end }
+local TrackerKaliels = ns.TrackerKaliels or { List = function() end, SetEnabled = function() end }
+local besideKaliels = false
 -- Whether the last attached layout went round another addon's list, which one, and the room it gave the sections.
 ---@type boolean, boolean, boolean, boolean, number
 local besideList, besideQuestie, besideEqot, besideEllesmere, displacedRoom = false, false, false, false, 0
@@ -878,6 +880,9 @@ local function LayoutModules(width, available, reserve)
 	local function LayOut(index, cap)
 		local module = modules[index]
 		module:SetWidth(width)
+		if TrackerKaliels.Style then
+			TrackerKaliels.Style(module, besideKaliels)
+		end
 		local ok = RunSafe(module.safeCall, "tracker section update", module.Update, module, cap)
 		local used = ok and module:GetContentsHeight() or 0
 		heights[index] = used
@@ -1062,7 +1067,7 @@ end
 -- native tracker keeps its slot. Only our frames move, and this runs only from Layout, which defers in combat; with
 -- `list` nil (the addon hid its list in combat) the column keeps its last place until the next out-of-combat pass.
 ---@param list ForeverTrackerEqotList|Frame?
----@param kind "eqot"|"ellesmere"|"questie"?
+---@param kind "eqot"|"ellesmere"|"questie"|"kaliels"?
 local function LayoutBesideList(list, kind)
 	if Editing() then
 		return
@@ -1079,11 +1084,17 @@ local function LayoutBesideList(list, kind)
 		module = TrackerEqot
 	elseif kind == "ellesmere" then
 		module = TrackerEllesmere
+	elseif kind == "kaliels" then
+		module = TrackerKaliels
 	end
 	host:Show()
 	local scale = host:GetEffectiveScale() / UIParent:GetEffectiveScale()
 	local screenWidth, screenHeight = UIParent:GetWidth() / scale, UIParent:GetHeight() / scale
-	local width = math.min(ObjectiveTrackerFrame:GetWidth(), screenWidth)
+	local width = math.min(
+		kind == "kaliels" and TrackerKaliels.Width(list, host)
+			or ObjectiveTrackerFrame:GetWidth(),
+		screenWidth
+	)
 	host:SetWidth(width)
 	displacedRoom = module.Room(list, host)
 	if not LayoutModules(width, displacedRoom, 0) then
@@ -1110,6 +1121,8 @@ local function Layout()
 		return
 	end
 	local settings = ApplyAttachment()
+	besideKaliels = false
+	TrackerKaliels.SetEnabled(attached)
 	ApplyBackdrop(settings)
 	Grip.Show(not attached)
 	-- Settle the host's scale before a list is normalised into it. EQOT's list is always in host units, and its
@@ -1118,6 +1131,19 @@ local function Layout()
 	if not attached then
 		besideList, besideQuestie, besideEqot, besideEllesmere = false, false, false, false
 		LayoutDetached(settings)
+		return
+	end
+	local kaliels, kalielsActive = TrackerKaliels.List(host, host.MarkDirty)
+	if kalielsActive then
+		besideKaliels = true
+		besideList = true
+		besideQuestie, besideEqot, besideEllesmere = false, false, false
+		if kaliels then
+			MatchScale(kaliels)
+			LayoutBesideList(kaliels, "kaliels")
+		else
+			host:Hide()
+		end
 		return
 	end
 	local eqot = TrackerEqot.List(host, host.MarkDirty)
@@ -1667,7 +1693,7 @@ function api.Debug()
 		)
 	end
 	local form = "combat=%s shown=%s hostH=%.1f host[%s] g[%s] nativeH=%.1f native[%s] g[%s] uiS%.2f"
-	return (form .. " questie=%s eqot=%s ellesmere=%s"):format(
+	return (form .. " questie=%s eqot=%s ellesmere=%s kaliels=%s"):format(
 		tostring(InCombatLockdown()),
 		tostring(host:IsShown()),
 		host:GetHeight() or -1,
@@ -1679,7 +1705,8 @@ function api.Debug()
 		UIParent:GetEffectiveScale(),
 		tostring(besideQuestie),
 		tostring(besideEqot),
-		tostring(besideEllesmere)
+		tostring(besideEllesmere),
+		tostring(besideKaliels)
 	)
 end
 
