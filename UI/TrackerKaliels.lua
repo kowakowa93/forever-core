@@ -89,12 +89,16 @@ local function StyleCollapse(module, active)
 	if active then
 		if not state.active then
 			state.nativeShown = native:IsShown()
+			state.headerWidth = header:GetWidth()
 			state.textPoints = {}
 			for index = 1, header.Text:GetNumPoints() do
 				state.textPoints[index] = { header.Text:GetPoint(index) }
 			end
 		end
 		state.active = true
+		-- Core anchors the scroll viewport to the header, whose template width is 260.
+		-- Match it to the module so the viewport does not clip wider KT content.
+		header:SetWidth(module:GetWidth())
 		native:Hide()
 		state.button:SetNormalTexture(reference:GetTexture())
 		local texture = state.button:GetNormalTexture()
@@ -109,6 +113,7 @@ local function StyleCollapse(module, active)
 		state.active = false
 		state.button:Hide()
 		native:SetShown(state.nativeShown)
+		header:SetWidth(state.headerWidth)
 		header.Text:ClearAllPoints()
 		for _, point in ipairs(state.textPoints) do
 			header.Text:SetPoint(unpack(point))
